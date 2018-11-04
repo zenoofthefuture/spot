@@ -9,8 +9,9 @@ license = "GPL-3.0"
 ethcore-network-devp2p = { path = "../../util/network-devp2p" }
 ethcore-network = { path = "../../util/network" }
 ethcore-logger = { path = "../../logger" }
+error-chain = { version = "0.12", default-features = false }
 parity-whisper = { path = "../" }
-docopt = "0.8"
+docopt = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 panic_hook = { path = "../../util/panic_hook" }

@@ -20,19 +20,17 @@
 //!
 
 #![warn(missing_docs)]
-#![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
 
 extern crate docopt;
-extern crate ethcore_network_devp2p as devp2p;
+extern crate ethcore_logger as log;
 extern crate ethcore_network as net;
+extern crate ethcore_network_devp2p as devp2p;
+extern crate jsonrpc_core;
+extern crate jsonrpc_http_server;
+extern crate jsonrpc_pubsub;
+extern crate panic_hook;
 extern crate parity_whisper as whisper;
 extern crate serde;
-extern crate panic_hook;
-
-extern crate jsonrpc_core;
-extern crate jsonrpc_pubsub;
-extern crate jsonrpc_http_server;
-extern crate ethcore_logger as log;
 
 #[macro_use]
 extern crate log as rlog;
@@ -40,14 +38,21 @@ extern crate log as rlog;
 #[macro_use]
 extern crate serde_derive;
 
+#[macro_use]
+extern crate error_chain;
+
+mod error;
+
+use std::{io, process, env, sync::Arc};
+
 use docopt::Docopt;
-use std::{fmt, io, process, env, sync::Arc};
+use error::{Error, ErrorKind};
 use jsonrpc_core::{Metadata, MetaIoHandler};
-use jsonrpc_pubsub::{PubSubMetadata, Session};
 use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation};
+use jsonrpc_pubsub::{PubSubMetadata, Session};
 
 const POOL_UNIT: usize = 1024 * 1024;
-const USAGE: &'static str = r#"
+const USAGE: &str = r#"
 Parity Whisper-v2 CLI.
 	Copyright 2015-2018 Parity Technologies (UK) Ltd.
 
@@ -124,65 +129,6 @@ impl RpcFactory {
 	}
 }
 
-#[derive(Debug)]
-enum Error {
-	Docopt(docopt::Error),
-	Io(io::Error),
-	JsonRpc(jsonrpc_core::Error),
-	Network(net::Error),
-	SockAddr(std::net::AddrParseError),
-	Logger(String),
-}
-
-impl From<std::net::AddrParseError> for Error {
-	fn from(err: std::net::AddrParseError) -> Self {
-		Error::SockAddr(err)
-	}
-}
-
-impl From<net::Error> for Error {
-	fn from(err: net::Error) -> Self {
-		Error::Network(err)
-	}
-}
-
-impl From<docopt::Error> for Error {
-	fn from(err: docopt::Error) -> Self {
-		Error::Docopt(err)
-	}
-}
-
-impl From<io::Error> for Error {
-	fn from(err: io::Error) -> Self {
-		Error::Io(err)
-	}
-}
-
-impl From<jsonrpc_core::Error> for Error {
-	fn from(err: jsonrpc_core::Error) -> Self {
-		Error::JsonRpc(err)
-	}
-}
-
-impl From<String> for Error {
-	fn from(err: String) -> Self {
-		Error::Logger(err)
-	}
-}
-
-impl fmt::Display for Error {
-	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		match *self {
-			Error::SockAddr(ref e) => write!(f, "{}", e),
-			Error::Docopt(ref e) => write!(f, "{}", e),
-			Error::Io(ref e) => write!(f, "{}", e),
-			Error::JsonRpc(ref e) => write!(f, "{:?}", e),
-			Error::Network(ref e) => write!(f, "{}", e),
-			Error::Logger(ref e) => write!(f, "{}", e),
-		}
-	}
-}
-
 fn main() {
 	panic_hook::set_abort();
 
@@ -191,7 +137,7 @@ fn main() {
 			println!("whisper-cli terminated");
 			process::exit(1);
 		},
-		Err(Error::Docopt(ref e)) => e.exit(),
+		Err(Error(ErrorKind::Docopt(e), _)) => e.exit(),
 		Err(err) => {
 			println!("{}", err);
 			process::exit(1);
@@ -234,7 +180,7 @@ fn execute<S, I>(command: I) -> Result<(), Error> where I: IntoIterator<Item=S>,
 	let shared_network = Arc::new(network);
 
 	// Pool handler
-	let whisper_factory = RpcFactory { handle: whisper_network_handler, manager: manager };
+	let whisper_factory = RpcFactory { handle: whisper_network_handler, manager };
 
 	io.extend_with(whisper::rpc::Whisper::to_delegate(whisper_factory.make_handler(shared_network.clone())));
 	io.extend_with(whisper::rpc::WhisperPubSub::to_delegate(whisper_factory.make_handler(shared_network.clone())));
@@ -250,9 +196,9 @@ fn execute<S, I>(command: I) -> Result<(), Error> where I: IntoIterator<Item=S>,
 }
 
 fn initialize_logger(log_level: String) -> Result<(), String> {
-	let mut l = log::Config::default();
-	l.mode = Some(log_level);
-	log::setup_log(&l)?;
+	let mut log_config = log::Config::default();
+	log_config.mode = Some(log_level);
+	log::setup_log(&log_config)?;
 	Ok(())
 }
 
