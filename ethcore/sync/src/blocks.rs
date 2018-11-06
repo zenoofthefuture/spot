@@ -360,6 +360,7 @@ impl BlockCollection {
 							if block.body.is_some() && (!self.need_receipts || block.receipts.is_some()) {
 								if blocks.len() >= MAX_DRAINED_BLOCKS {
 									blocks_remaining = true;
+									self.blocks.insert(head, block);
 									break;
 								}
 								blocks.push(block);
