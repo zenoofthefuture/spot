@@ -93,7 +93,7 @@ mod requester;
 mod supplier;
 
 use std::sync::Arc;
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashSet, HashMap, VecDeque};
 use std::cmp;
 use std::time::{Duration, Instant};
 use hash::keccak;
@@ -413,6 +413,8 @@ pub struct ChainSync {
 	private_tx_handler: Arc<PrivateTxHandler>,
 	/// Enable warp sync.
 	warp_sync: WarpSync,
+	/// Pending BlockSets to be collected
+	pending_block_collection: VecDeque<BlockSet>,
 }
 
 impl ChainSync {
@@ -440,6 +442,7 @@ impl ChainSync {
 			transactions_stats: TransactionsStats::default(),
 			private_tx_handler,
 			warp_sync: config.warp_sync,
+			pending_block_collection: VecDeque::new(),
 		};
 		sync.update_targets(chain);
 		sync
@@ -850,36 +853,43 @@ impl ChainSync {
 		}
 	}
 
+	/// Register that blocks need to be collected
+	fn register_collect_blocks(&mut self, block_set: BlockSet) {
+		self.pending_block_collection.push_back(block_set);
+	}
+
 	/// Checks if there are blocks fully downloaded that can be imported into the blockchain and does the import.
-	fn collect_blocks(&mut self, io: &mut SyncIo, block_set: BlockSet) {
-		match block_set {
-			BlockSet::NewBlocks => {
-				if self.new_blocks.collect_blocks(io, self.state == SyncState::NewBlocks) == DownloadAction::Reset {
-					self.reset_downloads(block_set);
-					self.new_blocks.reset();
-				}
-			},
-			BlockSet::OldBlocks => {
-				let mut is_complete = false;
-				let mut download_action = DownloadAction::None;
-				if let Some(downloader) = self.old_blocks.as_mut() {
-					download_action = downloader.collect_blocks(io, false);
-					is_complete = downloader.is_complete();
-				}
-
-				if download_action == DownloadAction::Reset {
-					self.reset_downloads(block_set);
-					if let Some(downloader) = self.old_blocks.as_mut() {
-						downloader.reset();
+	pub fn collect_blocks(&mut self, io: &mut SyncIo) {
+		if let Some(block_set) = self.pending_block_collection.pop_front() {
+			match block_set {
+				BlockSet::NewBlocks => {
+					if self.new_blocks.collect_blocks(io, self.state == SyncState::NewBlocks) == DownloadAction::Reset {
+						self.reset_downloads(block_set);
+						self.new_blocks.reset();
 					}
-				}
+				},
+				BlockSet::OldBlocks => {
+					let mut is_complete = false;
+					let mut download_action = DownloadAction::None;
+					if let Some(downloader) = self.old_blocks.as_mut() {
+						download_action = downloader.collect_blocks(io, false);
+						is_complete = downloader.is_complete();
+					}
 
-				if is_complete {
-					trace!(target: "sync", "Background block download is complete");
-					self.old_blocks = None;
-				}
-			}
-		};
+					if download_action == DownloadAction::Reset {
+						self.reset_downloads(block_set);
+						if let Some(downloader) = self.old_blocks.as_mut() {
+							downloader.reset();
+						}
+					}
+
+					if is_complete {
+						trace!(target: "sync", "Background block download is complete");
+						self.old_blocks = None;
+					}
+				},
+			};
+		}
 	}
 
 	/// Mark all outstanding requests as expired

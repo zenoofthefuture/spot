@@ -288,7 +288,7 @@ impl SyncHandler {
 	}
 
 	/// Called by peer once it has new block bodies
-	fn on_peer_block_bodies(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+	fn on_peer_block_bodies(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		sync.clear_peer_download(peer_id);
 		let block_set = sync.peers.get(&peer_id)
 			.and_then(|p| p.block_set)
@@ -327,7 +327,7 @@ impl SyncHandler {
 				};
 				downloader.import_bodies(r, expected_blocks.as_slice())?;
 			}
-			sync.collect_blocks(io, block_set);
+			sync.register_collect_blocks(block_set);
 			Ok(())
 		}
 	}
@@ -426,12 +426,12 @@ impl SyncHandler {
 			sync.reset_downloads(block_set);
 		}
 
-		sync.collect_blocks(io, block_set);
+		sync.register_collect_blocks(block_set);
 		Ok(())
 	}
 
 	/// Called by peer once it has new block receipts
-	fn on_peer_block_receipts(sync: &mut ChainSync, io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
+	fn on_peer_block_receipts(sync: &mut ChainSync, _io: &mut SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		sync.clear_peer_download(peer_id);
 		let block_set = sync.peers.get(&peer_id).and_then(|p| p.block_set).unwrap_or(BlockSet::NewBlocks);
 		let allowed = sync.peers.get(&peer_id).map(|p| p.is_allowed()).unwrap_or(false);
@@ -467,7 +467,7 @@ impl SyncHandler {
 				};
 				downloader.import_receipts(r, expected_blocks.as_slice())?;
 			}
-			sync.collect_blocks(io, block_set);
+			sync.register_collect_blocks(block_set);
 			Ok(())
 		}
 	}
