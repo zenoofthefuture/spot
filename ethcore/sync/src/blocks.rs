@@ -28,6 +28,8 @@ use transaction::UnverifiedTransaction;
 
 known_heap_size!(0, HeaderId);
 
+const MAX_DRAINED_BLOCKS: usize = 2_000;
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct SyncHeader {
 	pub bytes: Bytes,
@@ -339,11 +341,12 @@ impl BlockCollection {
 	}
 
 	/// Get a valid chain of blocks ordered in ascending order and ready for importing into blockchain.
-	pub fn drain(&mut self) -> Vec<BlockAndReceipts> {
+	pub fn drain(&mut self) -> (Vec<BlockAndReceipts>, bool) {
 		if self.blocks.is_empty() || self.head.is_none() {
-			return Vec::new();
+			return (Vec::new(), false);
 		}
 
+		let mut blocks_remaining = false;
 		let mut drained = Vec::new();
 		let mut hashes = Vec::new();
 		{
@@ -355,6 +358,10 @@ impl BlockCollection {
 					match self.blocks.remove(&head) {
 						Some(block) => {
 							if block.body.is_some() && (!self.need_receipts || block.receipts.is_some()) {
+								if blocks.len() >= MAX_DRAINED_BLOCKS {
+									blocks_remaining = true;
+									break;
+								}
 								blocks.push(block);
 								hashes.push(head);
 								self.head = Some(head);
@@ -380,7 +387,7 @@ impl BlockCollection {
 		}
 
 		trace!(target: "sync", "Drained {} blocks, new head :{:?}", drained.len(), self.head);
-		drained
+		(drained, blocks_remaining)
 	}
 
 	/// Check if the collection is empty. We consider the syncing round complete once

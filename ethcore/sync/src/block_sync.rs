@@ -519,10 +519,10 @@ impl BlockDownloader {
 
 	/// Checks if there are blocks fully downloaded that can be imported into the blockchain and does the import.
 	/// Returns DownloadAction::Reset if it is imported all the the blocks it can and all downloading peers should be reset
-	pub fn collect_blocks(&mut self, io: &mut SyncIo, allow_out_of_order: bool) -> DownloadAction {
+	pub fn collect_blocks(&mut self, io: &mut SyncIo, allow_out_of_order: bool) -> (DownloadAction, bool) {
 		let mut download_action = DownloadAction::None;
 		let mut imported = HashSet::new();
-		let blocks = self.blocks.drain();
+		let (blocks, blocks_remaining) = self.blocks.drain();
 		let count = blocks.len();
 		for block_and_receipts in blocks {
 			let block = block_and_receipts.block;
@@ -535,7 +535,7 @@ impl BlockDownloader {
 			if self.target_hash.as_ref().map_or(false, |t| t == &h) {
 				self.state = State::Complete;
 				trace_sync!(self, "Sync target reached");
-				return download_action;
+				return (download_action, blocks_remaining);
 			}
 
 			let result = if let Some(receipts) = receipts {
@@ -589,7 +589,7 @@ impl BlockDownloader {
 			trace_sync!(self, "Sync round complete");
 			download_action = DownloadAction::Reset;
 		}
-		download_action
+		(download_action, blocks_remaining)
 	}
 
 	fn block_imported(&mut self, hash: &H256, number: BlockNumber, parent: &H256) {

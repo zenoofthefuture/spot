@@ -863,16 +863,24 @@ impl ChainSync {
 		if let Some(block_set) = self.pending_block_collection.pop_front() {
 			match block_set {
 				BlockSet::NewBlocks => {
-					if self.new_blocks.collect_blocks(io, self.state == SyncState::NewBlocks) == DownloadAction::Reset {
+					let (download_action, blocks_remaining) = self.new_blocks.collect_blocks(io, self.state == SyncState::NewBlocks);
+					if download_action == DownloadAction::Reset {
 						self.reset_downloads(block_set);
 						self.new_blocks.reset();
+					}
+					if blocks_remaining {
+						self.pending_block_collection.push_back(BlockSet::NewBlocks);
 					}
 				},
 				BlockSet::OldBlocks => {
 					let mut is_complete = false;
 					let mut download_action = DownloadAction::None;
+					let mut blocks_remaining = false;
+
 					if let Some(downloader) = self.old_blocks.as_mut() {
-						download_action = downloader.collect_blocks(io, false);
+						let (r_download_action, r_blocks_remaining) = downloader.collect_blocks(io, false);
+						download_action = r_download_action;
+						blocks_remaining = r_blocks_remaining;
 						is_complete = downloader.is_complete();
 					}
 
@@ -882,7 +890,9 @@ impl ChainSync {
 							downloader.reset();
 						}
 					}
-
+					if blocks_remaining {
+						self.pending_block_collection.push_back(BlockSet::OldBlocks);
+					}
 					if is_complete {
 						trace!(target: "sync", "Background block download is complete");
 						self.old_blocks = None;
