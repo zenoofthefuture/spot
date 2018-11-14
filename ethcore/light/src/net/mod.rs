@@ -68,10 +68,10 @@ const PROPAGATE_TIMEOUT: TimerToken = 2;
 const PROPAGATE_TIMEOUT_INTERVAL: Duration = Duration::from_secs(5);
 
 const RECALCULATE_COSTS_TIMEOUT: TimerToken = 3;
-const RECALCULATE_COSTS_INTERVAL: Duration = Duration::from_secs(60 * 60);
+const RECALCULATE_COSTS_INTERVAL: Duration = Duration::from_secs(60);
 
 const STATISTICS_TIMEOUT: TimerToken = 4;
-const STATISTICS_INTERVAL: Duration = Duration::from_secs(60);
+const STATISTICS_INTERVAL: Duration = Duration::from_secs(10);
 
 // minimum interval between updates.
 const UPDATE_INTERVAL: Duration = Duration::from_millis(5000);
@@ -826,7 +826,7 @@ impl LightProtocol {
 			Duration::from_secs(self.config.max_stored_seconds),
 		));
 		*self.flow_params.write() = new_params.clone();
-		trace!(target: "pip", "New cost period: avg_peers={} ; cost_table:{:?}", avg_peer_count, new_params.cost_table());
+		info!(target: "pip", "New cost period: avg_peers={} ; cost_table:{:?}", avg_peer_count, new_params.cost_table());
 
 		let peers = self.peers.read();
 		let now = Instant::now();
