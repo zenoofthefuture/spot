@@ -33,19 +33,17 @@ use std::ffi::CString;
 use std::os::raw::{c_char, c_void, c_int};
 use std::{panic, ptr, slice, str, thread};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures::{Future, Stream};
 use futures::sync::mpsc;
-use futures::future;
-use tokio::prelude::Async::Ready;
-use futures::Async;
-use tokio_current_thread::CurrentThread;
+use futures::prelude::Async;
 use parity_ethereum::PubSubSession;
 
 type Callback = Option<extern "C" fn(*mut c_void, *const c_char, usize)>;
 
-const QUERY_TIMEOUT: Duration = Duration::from_secs(5*60);
+// FIXME: change this
+const QUERY_TIMEOUT: Duration = Duration::from_secs(25);
 
 #[repr(C)]
 pub struct ParityParams {
@@ -172,34 +170,39 @@ pub unsafe extern fn parity_rpc(
 		let (tx, mut rx) = mpsc::channel(1);
 		let session = Some(Arc::new(PubSubSession::new(tx)));
 
-		// FIXME: provide session object here, if we want to support the `PubSub`
-		let mut future = client.rpc_query(query_str, None).map(move |response| {
-			let (cstring, len) = match response {
-				Some(response) => to_cstring(response.into()),
-				_ => to_cstring("empty response".into()),
-			};
-			cb(ptr::null_mut(), cstring, len);
-			()
-		});
+		// spawn the query into a threadpool
+		let _ = tokio::run(
+			client.rpc_query(query_str, session).map(move |response| {
+				let (cstring, len) = match response {
+					Some(response) => to_cstring(response.into()),
+					_ => to_cstring("empty response".into()),
+				};
+				cb(ptr::null_mut(), cstring, len);
+			})
+		);
 
 		let _handle = thread::Builder::new()
 			.name("rpc-subscriber".into())
 			.spawn(move || {
-				let mut current_thread = CurrentThread::new();
-				let _ = current_thread.run_timeout(QUERY_TIMEOUT).map_err(|_e| {
-					let (cstring, len) = to_cstring("timeout".into());
-					callback(ptr::null_mut(), cstring, len);
-				});
-				loop {
-					// let _e = rx.by_ref().for_each(|r| {
-					//     println!("{:?}", r);
-					//     future::ok(())
-					// });
+				let start = Instant::now();
+				let mut ready_none = 0;
+				let mut not_ready = 0;
 
-					// if let Ok(Ready(_)) = future.poll() {
-					//     break;
-					// }
+				while start.elapsed() < QUERY_TIMEOUT {
+					match rx.poll() {
+						Ok(Async::Ready(Some(response))) => {
+							println!("rx success: {:?}", response);
+							break;
+						}
+						Ok(Async::Ready(None)) => ready_none += 1,
+						Ok(Async::NotReady) => not_ready += 1,
+						Err(e) => {
+							println!("poll rx error: {:?}", e);
+							break;
+						}
+					};
 				}
+				println!("thread timeout, responses: [ Ready(None): {} NotReady: {} ]", ready_none, not_ready);
 			})
 			.expect("rpc-subscriber thread shouldn't fail; qed");
 		0

@@ -52,9 +52,9 @@ int main() {
 		printf("parity light client failed\r\n");
 	}
 	// run the list of queries in the full client
-	if (parity_full() != 0) {
-		printf("parity client failed\r\n");
-	}
+	// if (parity_full() != 0) {
+	//     printf("parity client failed\r\n");
+	// }
     return 0;
 }
 
