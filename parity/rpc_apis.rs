@@ -234,6 +234,7 @@ pub struct FullDependencies {
 	pub whisper_rpc: Option<::whisper::RpcFactory>,
 	pub gas_price_percentile: usize,
 	pub poll_lifetime: u32,
+	pub allow_empty_block_result: bool,
 }
 
 impl FullDependencies {
@@ -290,7 +291,8 @@ impl FullDependencies {
 							allow_pending_receipt_query: !self.geth_compatibility,
 							send_block_number_in_get_work: !self.geth_compatibility,
 							gas_price_percentile: self.gas_price_percentile,
-							poll_lifetime: self.poll_lifetime
+							poll_lifetime: self.poll_lifetime,
+							allow_empty_block_result: self.allow_empty_block_result,
 						}
 					);
 					handler.extend_with(client.to_delegate());
