@@ -126,7 +126,7 @@ pub struct RunCmd {
 	pub stratum: Option<stratum::Options>,
 	pub snapshot_conf: SnapshotConfiguration,
 	pub check_seal: bool,
-	pub allow_empty_block_result: bool,
+	pub jsonrpc_allow_missing_blocks: bool,
 	pub download_old_blocks: bool,
 	pub verifier_settings: VerifierSettings,
 	pub serve_light: bool,
@@ -720,7 +720,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		private_tx_service: Some(private_tx_service.clone()),
 		gas_price_percentile: cmd.gas_price_percentile,
 		poll_lifetime: cmd.poll_lifetime,
-		allow_empty_block_result: cmd.allow_empty_block_result,
+		jsonrpc_allow_missing_blocks: cmd.jsonrpc_allow_missing_blocks,
 	});
 
 	let dependencies = rpc::Dependencies {
